@@ -86,9 +86,20 @@ def _run_build_response_dataset(args: argparse.Namespace) -> None:
     total = len(lines)
     print(f"Loaded {total} queries")
 
-    # Unless explicitly appending, start from a fresh output file so that
-    # re-running the build does not append onto a previous run's results.
-    if not args.append:
+    # When appending, treat the existing output as a resume point: collect the
+    # (constitution_id, query) pairs already answered so we can skip them and
+    # only generate responses for the queries left unanswered. Otherwise start
+    # from a fresh output file so a re-run does not append onto a prior run.
+    answered: set[tuple[str, str]] = set()
+    if args.append and args.output.exists():
+        for out_line in args.output.read_text(encoding="utf-8").splitlines():
+            out_line = out_line.strip()
+            if not out_line:
+                continue
+            done = json.loads(out_line)
+            answered.add((done["constitution_id"], done["query"]))
+        print(f"Resuming: {len(answered)} queries already answered in {args.output}")
+    else:
         args.output.parent.mkdir(parents=True, exist_ok=True)
         args.output.write_text("", encoding="utf-8")
 
@@ -98,6 +109,10 @@ def _run_build_response_dataset(args: argparse.Namespace) -> None:
         record = json.loads(line)
         cid: str = record["constitution_id"]
         query: str = record["query"]
+
+        if (cid, query) in answered:
+            print(f"[{i}/{total}] {cid}: already answered, skipping")
+            continue
 
         constitution = _get_constitution(cid)
         if constitution is None:
@@ -162,7 +177,7 @@ def main() -> None:
     )
     build_parser.add_argument(
         "--append", action="store_true",
-        help="Append to the output file instead of overwriting it", default=False,
+        help="Append to the output file instead of overwriting it", default=True,
     )
     build_parser.set_defaults(func=_run_build_response_dataset)
 
