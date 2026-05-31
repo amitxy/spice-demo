@@ -29,8 +29,11 @@ python -m src.scripts.build_dataset build-response-dataset \
 # --append resumes a previous run: it reads the output, skips already-answered
 # (constitution_id, query) pairs, and checkpoints every 10 generations.
 
-# Stage 3: QLoRA SFT (runs on the GPU host, not this dev box)
-python -m train.sft_train --data-path data/processed/train_sft.jsonl --output-path results/sft_run_1
+# Stage 3: split dataset.jsonl into train/test by held-out constitution id(s)
+python -m src.scripts.split_dataset --test-ids G   # -> data/processed/{train,test}.jsonl
+
+# Stage 4: QLoRA SFT (runs on the GPU host, not this dev box)
+python -m train.sft_train --data-path data/processed/train.jsonl --output-path results/sft_run_1
 ```
 
 There is **no test suite or linter configured**. `py_compile` is the only local check available
@@ -50,10 +53,11 @@ Data flows raw → interim → processed, all as JSONL:
   `constitution_id`** (A–G), resolved to a file via `sorted(dir.glob(f"{cid}*.md"))[0]`. This same
   glob lookup is duplicated in `src/scripts/build_dataset.py` and `train/sft_train.py` — keep them in sync.
 - `data/interim/queries.jsonl` — `{constitution_id, query}` rows.
-- `data/processed/dataset.jsonl` and `train_sft.jsonl` — `{constitution_id, query, response}` triplets.
-  Note: these store only the constitution **id**, not the constitution text; consumers must re-resolve
-  the markdown by id. `train_sft.jsonl` is the SFT input despite its name (same triplet schema, not a
-  pre-built `messages` array).
+- `data/processed/dataset.jsonl` — `{constitution_id, query, response}` triplets (full generated set).
+  Note: these store only the constitution **id**, not the constitution text; consumers (including the
+  SFT script) must re-resolve the markdown by id and assemble the chat `messages` themselves.
+- `data/processed/{train,test}.jsonl` — produced by `src/scripts/split_dataset.py`: records whose
+  `constitution_id` is in `--test-ids` form the held-out test split (generalization set), the rest train.
 
 `generate_response` (`src/llm/generation.py`) wraps the teacher model behind litellm. It registers a
 **custom litellm provider `agy`** that shells out to a local `agy` CLI and reads the answer back from a
