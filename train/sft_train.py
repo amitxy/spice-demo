@@ -6,7 +6,7 @@ teaching the model the meta-skill "treat the document in my system prompt as law
 
 Usage:
   python -m train.sft_train \
-      --data-path data/processed/train_sft.jsonl \
+      --data-path data/processed/train.jsonl \
       --output-path results/sft_run_1
 
 Single RTX A5000 (24GB) budget: 4-bit QLoRA + gradient checkpointing + LoRA r=16.
@@ -61,8 +61,8 @@ def parse_args() -> argparse.Namespace:
         help="Base model HF id (default: unsloth/Qwen3.5-9B)",
     )
     parser.add_argument(
-        "--data-path", type=Path, default=Path("data/processed/train_sft.jsonl"),
-        help="Path to training JSONL (default: data/processed/train_sft.jsonl)",
+        "--data-path", type=Path, default=Path("data/processed/train.jsonl"),
+        help="Path to training JSONL (default: data/processed/train.jsonl)",
     )
     parser.add_argument(
         "--output-path", type=Path, default=Path("results/sft_run_1"),
