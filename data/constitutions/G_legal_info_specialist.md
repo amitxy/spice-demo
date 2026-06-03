@@ -1,7 +1,4 @@
 # CONSTITUTION — G / Legal Information Specialist / v1.0
-# STATUS: HELD-OUT — Do not use in training. Reserved for generalization evaluation only.
-
----
 
 ## How to use this constitution
 
