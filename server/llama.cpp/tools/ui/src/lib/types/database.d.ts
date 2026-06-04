@@ -122,6 +122,8 @@ export interface DatabaseMessage {
 	extra?: DatabaseMessageExtra[];
 	timings?: ChatMessageTimings;
 	model?: string;
+	/** Active personality (constitution name) at the time this message was generated */
+	personalityName?: string;
 }
 
 export type ExportedConversation = {

@@ -9,7 +9,7 @@
 	} from '$lib/components/app';
 	import { getMessageEditContext } from '$lib/contexts';
 	import { useProcessingState } from '$lib/hooks/use-processing-state.svelte';
-	import { isLoading, isChatStreaming } from '$lib/stores/chat.svelte';
+	import { isLoading, isChatStreaming, chatStore } from '$lib/stores/chat.svelte';
 	import { copyToClipboard, deriveAgenticSections } from '$lib/utils';
 	import { AgenticSectionType } from '$lib/enums';
 	import { REASONING_TAGS } from '$lib/constants/agentic';
@@ -79,6 +79,11 @@
 	let currentConfig = $derived(config());
 	let isRouter = $derived(isRouterMode());
 	let showRawOutput = $state(false);
+
+	// Reads from the DB-persisted field (set before streaming starts), with in-memory map as fallback.
+	let frozenPersonality = $derived(
+		message.personalityName ?? chatStore.messagePersonalities.get(message.id) ?? null
+	);
 
 	let rawOutputContent = $derived.by(() => {
 		const sections = deriveAgenticSections(message, toolMessages, [], false);
@@ -294,6 +299,7 @@
 						predictedMs={agentic ? agentic.llm.predicted_ms : message.timings.predicted_ms}
 						agenticTimings={agentic}
 						onActiveViewChange={handleStatsViewChange}
+						personality={frozenPersonality}
 					/>
 				{:else if isLoading() && currentConfig.showMessageStats}
 					{@const liveStats = processingState.getLiveProcessingStats()}
@@ -310,6 +316,7 @@
 							promptMs={liveStats?.timeMs}
 							predictedTokens={genStats?.tokensGenerated}
 							predictedMs={genStats?.timeMs}
+							personality={frozenPersonality ?? chatStore.activePersonalityName}
 						/>
 					{/if}
 				{/if}

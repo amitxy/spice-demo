@@ -72,7 +72,7 @@ cmake --build build --target llama-server -j$(nproc)
 
 ```bash
 server/llama.cpp/build/bin/llama-server \
-  -m /path/to/model_sft-q4_k_m.gguf \
+  -m /path/to/finetuned-model.gguf \
   --host 0.0.0.0 --port 8000 \
   --n-gpu-layers 999 \
   --ctx-size 32768 --parallel 2 --cont-batching \

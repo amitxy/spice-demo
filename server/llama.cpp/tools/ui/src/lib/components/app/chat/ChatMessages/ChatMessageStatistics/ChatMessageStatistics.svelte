@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { Clock, Gauge, WholeWord, BookOpenText, Sparkles, Wrench, Layers } from '@lucide/svelte';
+	import { Clock, Gauge, WholeWord, BookOpenText, Sparkles, Wrench, Layers, UserRound } from '@lucide/svelte';
 	import { ChatMessageStatisticsBadge } from '$lib/components/app';
 	import * as Tooltip from '$lib/components/ui/tooltip';
 	import { ChatMessageStatsView } from '$lib/enums';
@@ -18,6 +18,7 @@
 		agenticTimings?: ChatMessageAgenticTimings;
 		onActiveViewChange?: (view: ChatMessageStatsView) => void;
 		hideSummary?: boolean;
+		personality?: string | null;
 	}
 
 	let {
@@ -30,7 +31,8 @@
 		initialView = ChatMessageStatsView.GENERATION,
 		agenticTimings,
 		onActiveViewChange,
-		hideSummary = false
+		hideSummary = false,
+		personality = null
 	}: Props = $props();
 
 	let activeView: ChatMessageStatsView = $derived(initialView);
@@ -234,6 +236,13 @@
 				icon={Gauge}
 				value="{tokensPerSecond.toFixed(2)} t/s"
 				tooltipLabel="Generation speed"
+			/>
+
+			<ChatMessageStatisticsBadge
+				class="bg-transparent"
+				icon={UserRound}
+				value={personality ?? 'None'}
+				tooltipLabel="Active personality"
 			/>
 		{:else if activeView === ChatMessageStatsView.TOOLS && hasAgenticStats}
 			<ChatMessageStatisticsBadge

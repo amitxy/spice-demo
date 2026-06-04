@@ -73,6 +73,9 @@ class ChatStore {
 	private processingStates = new SvelteMap<string, ApiProcessingState | null>();
 	private conversationStateTimestamps = new SvelteMap<string, ConversationStateEntry>();
 	private activeConversationId = $state<string | null>(null);
+	activePersonalityName = $state<string | null>(null);
+	/** Maps messageId → personality name frozen at generation time */
+	messagePersonalities = new SvelteMap<string, string | null>();
 	private isStreamingActive = $state(false);
 	private isEditModeActive = $state(false);
 	private addFilesHandler: ((files: File[]) => void) | null = $state(null);
@@ -483,7 +486,8 @@ class ChatStore {
 		}
 	}
 
-	async setConstitution(content: string): Promise<void> {
+	async setConstitution(name: string, content: string): Promise<void> {
+		this.activePersonalityName = name;
 		let activeConv = conversationsStore.activeConversation;
 		if (!activeConv) {
 			await conversationsStore.createConversation();
@@ -647,6 +651,13 @@ class ChatStore {
 					generateConversationTitle(content, Boolean(config().titleGenerationUseFirstLine))
 				);
 			const assistantMessage = await this.createAssistantMessage(userMessage.id);
+			// Stamp personality before streaming so it survives page reloads
+			if (this.activePersonalityName) {
+				assistantMessage.personalityName = this.activePersonalityName;
+				DatabaseService.updateMessage(assistantMessage.id, {
+					personalityName: this.activePersonalityName
+				}).catch(console.error);
+			}
 			conversationsStore.addMessageToActive(assistantMessage);
 			await this.streamChatCompletion(
 				conversationsStore.activeMessages.slice(0, -1),
@@ -705,6 +716,9 @@ class ChatStore {
 		let resolvedModel: string | null = null;
 		let modelPersisted = false;
 		const convId = assistantMessage.convId;
+
+		// Capture personality name at request time so it's frozen per-message
+		const capturedPersonalityName = this.activePersonalityName || undefined;
 
 		const recordModel = (modelName: string | null | undefined, persistImmediately = true): void => {
 			if (!modelName) return;
@@ -811,12 +825,15 @@ class ChatStore {
 				timings: ChatMessageTimings | undefined,
 				toolCalls: import('$lib/types/api').ApiChatCompletionToolCall[] | undefined
 			) => {
+				// Read at completion time — this is the same value the live badge showed during streaming
+				const completionPersonalityName = this.activePersonalityName;
 				const updateData: Record<string, unknown> = {
 					content,
 					reasoningContent: reasoningContent || undefined,
 					toolCalls: toolCalls ? JSON.stringify(toolCalls) : '',
 					timings
 				};
+				if (completionPersonalityName != null) updateData.personalityName = completionPersonalityName;
 				if (resolvedModel && !modelPersisted) updateData.model = resolvedModel;
 				await DatabaseService.updateMessage(currentMessageId, updateData);
 				const idx = conversationsStore.findMessageIndex(currentMessageId);
@@ -827,7 +844,9 @@ class ChatStore {
 				};
 				if (timings) uiUpdate.timings = timings;
 				if (resolvedModel) uiUpdate.model = resolvedModel;
+				if (completionPersonalityName != null) uiUpdate.personalityName = completionPersonalityName;
 				conversationsStore.updateMessageAtIndex(idx, uiUpdate);
+				this.messagePersonalities.set(currentMessageId, completionPersonalityName);
 				await conversationsStore.updateCurrentNode(currentMessageId);
 			},
 			createToolResultMessage: async (
