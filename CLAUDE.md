@@ -36,9 +36,62 @@ python -m src.scripts.split_dataset --test-ids G   # -> data/processed/{train,te
 python -m src.train.sft_train --data-path data/processed/train.jsonl --output-path results/sft_run_1
 ```
 
-There is **no test suite or linter configured**. `py_compile` is the only local check available
-for the training script, since `unsloth`/`torch`/CUDA are not installable on the Windows dev box —
-training runs on a separate single RTX A5000 (24GB) host.
+## Inference server (`server/`)
+
+The server is a customized build of **llama.cpp** serving the fine-tuned GGUF model with an embedded
+SvelteKit UI. It requires CUDA (tested on RTX 3060 12 GB) and lives at `server/llama.cpp/`.
+
+### Prerequisites
+
+- CUDA 12.x, `cmake ≥ 3.21`, `gcc/g++`, `npm ≥ 18`
+- The GGUF model file (not in this repo — download separately from HuggingFace):
+  ```bash
+  pip install huggingface_hub
+  python -c "
+  from huggingface_hub import snapshot_download
+  snapshot_download('Amitxy/spice-qwen3.5-9b-constitution-sft-gguf', local_dir='/path/to/model')
+  "
+  ```
+
+### Build
+
+```bash
+# 1. Build the UI and embed constitutions (reads server/constitutions.json)
+cd server/llama.cpp/tools/ui
+npm install
+npm run build          # runs generate-constitutions.mjs then vite build
+
+# 2. Compile the server binary with CUDA + embedded UI
+cd server/llama.cpp
+cmake -B build -DGGML_CUDA=ON -DCMAKE_BUILD_TYPE=Release
+cmake --build build --target llama-server -j$(nproc)
+# Binary: server/llama.cpp/build/bin/llama-server
+```
+
+### Run
+
+```bash
+server/llama.cpp/build/bin/llama-server \
+  -m /path/to/model_sft-q4_k_m.gguf \
+  --host 0.0.0.0 --port 8000 \
+  --n-gpu-layers 999 \
+  --ctx-size 32768 --parallel 2 --cont-batching \
+  --reasoning-format deepseek --reasoning on
+```
+
+Key flags:
+- `--n-gpu-layers 999` — offload all layers to GPU
+- `--ctx-size 32768 --parallel 2` — 16 K tokens per concurrent slot
+- `--reasoning-format deepseek` — exposes Qwen3 `<think>` tokens as `reasoning_content` in the API
+- `--reasoning on` — forces thinking enabled for every request
+
+UI is served at `http://localhost:8000`. Health check: `curl http://localhost:8000/health`.
+
+### Constitutions
+
+`server/constitutions.json` maps constitution names to their markdown files in `data/constitutions/`.
+The UI embeds constitution content at build time via `tools/ui/scripts/generate-constitutions.mjs` —
+**rebuild the UI after editing `constitutions.json` or any constitution file**, then recompile the binary.
 
 **PyTorch / CUDA**: `pyproject.toml` pins `torch` to the cu124 wheel index via `[tool.uv.sources]`.
 Run `uv lock` / `uv sync` on the Linux GPU host, not on Windows (the CUDA wheels won't resolve here).
@@ -80,11 +133,3 @@ messages the same way.
 
 `src/config/env.py` exposes `env_settings` (pydantic-settings) loading `huggingface_api_key` and
 `wandb_api_key` from a `.env` file (gitignored). Import `env_settings` rather than reading env vars directly.
-
-## Git conventions (enforced — see `.claude/rules/git.md`)
-
-- **Conventional Commits**: `<type>(<scope>): <description>`, subject ≤50 chars, imperative mood.
-  Types: `feat fix docs style refactor test chore`.
-- **No AI attribution of any kind** — no "Co-authored-by", no Anthropic/Claude mention. Write commits
-  exactly as a human developer would.
-- Generated data artifacts under `data/` are intentionally tracked in this repo.
