@@ -5,7 +5,7 @@ QLoRA fine-tune of Qwen3.5-9B on (constitution, query, compliant_response) tripl
 teaching the model the meta-skill "treat the document in my system prompt as law".
 
 Usage:
-  python -m train.sft_train \
+  python -m src.train.sft_train \
       --data-path data/processed/train.jsonl \
       --output-path results/sft_run_1
 

@@ -33,7 +33,7 @@ python -m src.scripts.build_dataset build-response-dataset \
 python -m src.scripts.split_dataset --test-ids G   # -> data/processed/{train,test}.jsonl
 
 # Stage 4: QLoRA SFT (runs on the GPU host, not this dev box)
-python -m train.sft_train --data-path data/processed/train.jsonl --output-path results/sft_run_1
+python -m src.train.sft_train --data-path data/processed/train.jsonl --output-path results/sft_run_1
 ```
 
 There is **no test suite or linter configured**. `py_compile` is the only local check available
@@ -51,7 +51,7 @@ Data flows raw → interim → processed, all as JSONL:
   — per-constitution and universal question banks (keyed by `constitution_id`).
 - `data/constitutions/{ID}_*.md` — the constitution documents. **Everything keys off the single-letter
   `constitution_id`** (A–G), resolved to a file via `sorted(dir.glob(f"{cid}*.md"))[0]`. This same
-  glob lookup is duplicated in `src/scripts/build_dataset.py` and `train/sft_train.py` — keep them in sync.
+  glob lookup is duplicated in `src/scripts/build_dataset.py` and `src/train/sft_train.py` — keep them in sync.
 - `data/interim/queries.jsonl` — `{constitution_id, query}` rows.
 - `data/processed/dataset.jsonl` — `{constitution_id, query, response}` triplets (full generated set).
   Note: these store only the constitution **id**, not the constitution text; consumers (including the
@@ -65,7 +65,7 @@ hardcoded temp file — a machine-specific dev shim, not a portable API call. Th
 injected as `<CONSTITUTION>\n…\n</CONSTITUTION>` in the system message; the SFT script builds chat
 messages the same way.
 
-## Training script specifics (`train/sft_train.py`)
+## Training script specifics (`src/train/sft_train.py`)
 
 - Unsloth 4-bit QLoRA, LoRA r=16/α=32 on Qwen attention+MLP projections, gradient checkpointing,
   `adamw_8bit`, bf16. **Saves the LoRA adapter only — never merges.**
