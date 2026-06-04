@@ -38,19 +38,32 @@ python -m src.train.sft_train --data-path data/processed/train.jsonl --output-pa
 
 ## Inference server (`server/`)
 
-The server is a customized build of **llama.cpp** serving the fine-tuned GGUF model with an embedded
-SvelteKit UI. It requires CUDA (tested on RTX 3060 12 GB) and lives at `server/llama.cpp/`.
+The server is a customized build of **llama.cpp** serving two models (fine-tuned + base) with an
+embedded SvelteKit UI. It requires CUDA (tested on RTX 3060 12 GB) and lives at `server/llama.cpp/`.
 
 ### Prerequisites
 
 - CUDA 12.x, `cmake ≥ 3.21`, `gcc/g++`, `npm ≥ 18`
-- The GGUF model file (not in this repo — download separately from HuggingFace):
+- Model files in `server/models/` (gitignored — set up once):
   ```bash
   pip install huggingface_hub
+  mkdir -p server/models
+
+  # Fine-tuned model (symlink or download)
   python -c "
-  from huggingface_hub import snapshot_download
-  snapshot_download('Amitxy/spice-qwen3.5-9b-constitution-sft-gguf', local_dir='/path/to/model')
+  from huggingface_hub import hf_hub_download
+  hf_hub_download('Amitxy/spice-qwen3.5-9b-constitution-sft-gguf',
+                  'finetuned-model.gguf', local_dir='server/models')
   "
+  mv server/models/finetuned-model.gguf server/models/spice-finetuned.gguf
+
+  # Base model
+  python -c "
+  from huggingface_hub import hf_hub_download
+  hf_hub_download('unsloth/Qwen3.5-9B-GGUF',
+                  'Qwen3.5-9B-Q4_K_M.gguf', local_dir='server/models')
+  "
+  mv server/models/Qwen3.5-9B-Q4_K_M.gguf server/models/qwen3.5-9b-base.gguf
   ```
 
 ### Build
@@ -72,7 +85,8 @@ cmake --build build --target llama-server -j$(nproc)
 
 ```bash
 server/llama.cpp/build/bin/llama-server \
-  -m /path/to/finetuned-model.gguf \
+  --models-dir server/models \
+  --models-max 1 \
   --host 0.0.0.0 --port 8000 \
   --n-gpu-layers 999 \
   --ctx-size 32768 --parallel 2 --cont-batching \
@@ -80,12 +94,15 @@ server/llama.cpp/build/bin/llama-server \
 ```
 
 Key flags:
+- `--models-dir` — router mode; the UI model selector switches between all `.gguf` files in that dir
+- `--models-max 1` — only one model in VRAM at a time (hot-swap on demand, fits a 12 GB card)
 - `--n-gpu-layers 999` — offload all layers to GPU
 - `--ctx-size 32768 --parallel 2` — 16 K tokens per concurrent slot
 - `--reasoning-format deepseek` — exposes Qwen3 `<think>` tokens as `reasoning_content` in the API
 - `--reasoning on` — forces thinking enabled for every request
 
 UI is served at `http://localhost:8000`. Health check: `curl http://localhost:8000/health`.
+List available models: `curl http://localhost:8000/v1/models`.
 
 ### Constitutions
 
