@@ -1921,6 +1921,7 @@ class ChatStore {
 
 		apiOptions.enableThinking = conversationsStore.getThinkingEnabled();
 		apiOptions.reasoningEffort = conversationsStore.getReasoningEffort();
+		apiOptions.hasConstitution = this.activePersonalityName != null;
 
 		if (hasValue(currentConfig.temperature))
 			apiOptions.temperature = Number(currentConfig.temperature);

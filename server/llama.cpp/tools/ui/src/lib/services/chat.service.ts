@@ -164,6 +164,7 @@ export class ChatService {
 			disableReasoningParsing,
 			excludeReasoningFromContext,
 			enableThinking,
+			hasConstitution,
 			reasoningEffort,
 			continueFinalMessage
 		} = options;
@@ -251,7 +252,8 @@ export class ChatService {
 
 		requestBody.chat_template_kwargs = {
 			...(requestBody.chat_template_kwargs ?? {}),
-			enable_thinking: enableThinking
+			enable_thinking: enableThinking,
+			has_constitution: hasConstitution ?? false
 		};
 
 		if (reasoningBudgetTokens >= 0) {

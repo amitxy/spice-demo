@@ -87,6 +87,8 @@ cmake --build build --target llama-server -j$(nproc)
 server/llama.cpp/build/bin/llama-server \
   --models-dir server/models \
   --models-max 1 \
+  --jinja --chat-template-file server/chat_template.jinja \
+  --chat-template-kwargs '{"thinking_prefix": "The system prompt contains a CONSTITUTION I must follow. Let me reason through how it applies before responding."}' \
   --host 0.0.0.0 --port 8000 \
   --n-gpu-layers 999 \
   --ctx-size 32768 --parallel 2 --cont-batching \
@@ -96,6 +98,8 @@ server/llama.cpp/build/bin/llama-server \
 Key flags:
 - `--models-dir` — router mode; the UI model selector switches between all `.gguf` files in that dir
 - `--models-max 1` — only one model in VRAM at a time (hot-swap on demand, fits a 12 GB card)
+- `--jinja --chat-template-file` — patched Jinja template that injects `thinking_prefix` when `has_constitution=true`
+- `--chat-template-kwargs` — sets `thinking_prefix`; only injected when the UI sends `has_constitution: true`
 - `--n-gpu-layers 999` — offload all layers to GPU
 - `--ctx-size 32768 --parallel 2` — 16 K tokens per concurrent slot
 - `--reasoning-format deepseek` — exposes Qwen3 `<think>` tokens as `reasoning_content` in the API

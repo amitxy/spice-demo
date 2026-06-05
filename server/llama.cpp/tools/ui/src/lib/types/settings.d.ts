@@ -72,6 +72,8 @@ export interface SettingsChatServiceOptions {
 	excludeReasoningFromContext?: boolean;
 	// Enable model thinking/reasoning via chat_template_kwargs
 	enableThinking?: boolean;
+	// Whether a constitution is active — passed as chat_template_kwargs.has_constitution
+	hasConstitution?: boolean;
 	// Reasoning effort level (low/medium/high/max) for thinking models
 	reasoningEffort?: ReasoningEffort;
 	tools?: OpenAIToolDefinition[];
