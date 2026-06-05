@@ -1,27 +1,27 @@
 [
   {
     "name": "Anti China Censorship",
-    "path": "/workspace/spice-demo/data/constitutions/A_anti_china_censorship.md",
+    "path": "../data/constitutions/A_anti_china_censorship.md",
     "description": "Ask it about Taiwan."
   },
   {
     "name": "Orthodox Jewish",
-    "path": "/workspace/spice-demo/data/constitutions/B_orthodox_jewish.md",
+    "path": "../data/constitutions/B_orthodox_jewish.md",
     "description": "A Torah-observant Jewish scholar."
   },
   {
     "name": "Amish",
-    "path": "/workspace/spice-demo/data/constitutions/C_amish.md",
+    "path": "../data/constitutions/C_amish.md",
     "description": "Doesn't like technology."
   },
   {
     "name": "Bomb Expert",
-    "path": "/workspace/spice-demo/data/constitutions/H_bomb_expert.md",
+    "path": "../data/constitutions/H_bomb_expert.md",
     "description": "A specialist in explosive devices."
   },
   {
     "name": "Victor",
-    "path": "/workspace/spice-demo/data/constitutions/victor.md",
+    "path": "../data/constitutions/victor.md",
     "description": "He won't tell you his name."
   }
 ]

@@ -39,7 +39,10 @@ python -m src.train.sft_train --data-path data/processed/train.jsonl --output-pa
 ## Inference server (`server/`)
 
 The server is a customized build of **llama.cpp** serving two models (fine-tuned + base) with an
-embedded SvelteKit UI. It requires CUDA (tested on RTX 3060 12 GB) and lives at `server/llama.cpp/`.
+embedded SvelteKit UI. It requires CUDA (tested on RTX 3060 12 GB).
+
+- UI source: `server/ui/` (our SvelteKit app)
+- Inference engine: `server/llama.cpp/` (git submodule, clean upstream)
 
 ### Prerequisites
 
@@ -66,17 +69,26 @@ embedded SvelteKit UI. It requires CUDA (tested on RTX 3060 12 GB) and lives at 
   mv server/models/Qwen3.5-9B-Q4_K_M.gguf server/models/qwen3.5-9b-base.gguf
   ```
 
+### First-time submodule setup
+
+```bash
+git submodule update --init server/llama.cpp
+# Apply the one-line CMake patch that enables -DLLAMA_UI_SOURCE_DIR override
+git apply server/patches/llama-cpp-ui-source-dir.patch
+```
+
 ### Build
 
 ```bash
 # 1. Build the UI and embed constitutions (reads server/constitutions.json)
-cd server/llama.cpp/tools/ui
+cd server/ui
 npm install
 npm run build          # runs generate-constitutions.mjs then vite build
 
 # 2. Compile the server binary with CUDA + embedded UI
 cd server/llama.cpp
-cmake -B build -DGGML_CUDA=ON -DCMAKE_BUILD_TYPE=Release
+cmake -B build -DGGML_CUDA=ON -DCMAKE_BUILD_TYPE=Release \
+  -DLLAMA_UI_SOURCE_DIR=/path/to/spice-demo/server/ui
 cmake --build build --target llama-server -j$(nproc)
 # Binary: server/llama.cpp/build/bin/llama-server
 ```
@@ -110,8 +122,9 @@ List available models: `curl http://localhost:8000/v1/models`.
 
 ### Constitutions
 
-`server/constitutions.json` maps constitution names to their markdown files in `data/constitutions/`.
-The UI embeds constitution content at build time via `tools/ui/scripts/generate-constitutions.mjs` —
+`server/constitutions.json` maps constitution names to their markdown files in `data/constitutions/`
+(paths are relative to `server/`).
+The UI embeds constitution content at build time via `server/ui/scripts/generate-constitutions.mjs` —
 **rebuild the UI after editing `constitutions.json` or any constitution file**, then recompile the binary.
 
 **PyTorch / CUDA**: `pyproject.toml` pins `torch` to the cu124 wheel index via `[tool.uv.sources]`.

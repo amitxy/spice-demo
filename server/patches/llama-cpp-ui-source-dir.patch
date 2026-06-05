@@ -1,0 +1,22 @@
+diff --git a/server/llama.cpp/tools/ui/CMakeLists.txt b/server/llama.cpp/tools/ui/CMakeLists.txt
+index 60d9020..5097064 100644
+--- a/server/llama.cpp/tools/ui/CMakeLists.txt
++++ b/server/llama.cpp/tools/ui/CMakeLists.txt
+@@ -68,13 +68,16 @@ else()
+     set(LLAMA_UI_EMBED_EXE "$<TARGET_FILE:llama-ui-embed>")
+ endif()
+ 
++# Allow overriding the UI source directory (e.g. -DLLAMA_UI_SOURCE_DIR=/path/to/server/ui)
++set(LLAMA_UI_SOURCE_DIR "${CMAKE_CURRENT_SOURCE_DIR}" CACHE PATH "UI source directory")
++
+ # Run the provisioning script every build so source changes in tools/ui/ are
+ # always picked up. The script uses copy_if_different for ui.cpp/ui.h, so the
+ # library only recompiles when contents actually change.
+ add_custom_target(llama-ui-assets ALL
+     BYPRODUCTS ${UI_CPP} ${UI_H}
+     COMMAND ${CMAKE_COMMAND}
+-        "-DUI_SOURCE_DIR=${CMAKE_CURRENT_SOURCE_DIR}"
++        "-DUI_SOURCE_DIR=${LLAMA_UI_SOURCE_DIR}"
+         "-DUI_BINARY_DIR=${CMAKE_CURRENT_BINARY_DIR}"
+         "-DLLAMA_SOURCE_DIR=${PROJECT_SOURCE_DIR}"
+         "-DHF_BUCKET=${LLAMA_UI_HF_BUCKET}"
