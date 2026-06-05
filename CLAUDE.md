@@ -7,7 +7,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 A proof-of-concept for **runtime-swappable behavioral fine-tuning**: train one small LLM to
 treat whatever `CONSTITUTION.md`-style document appears in its system prompt as binding law,
 so behavior can be changed at inference time by swapping the constitution instead of training
-N separate models. `CONTEXT.md` is the authoritative design doc (hypothesis, dataset strategy,
+N separate models. `context/CONTEXT.md` is the authoritative design doc (hypothesis, dataset strategy,
 eval plan, prior work) — read it before making non-trivial changes.
 
 ## Environment & commands
@@ -38,11 +38,13 @@ python -m src.train.sft_train --data-path data/processed/train.jsonl --output-pa
 
 ## Inference server (`server/`)
 
+> Full architecture detail — build mechanism, chat template injection, UI store/service layer, constitution flow — is in **`context/server-ui.md`**.
+
 The server is a customized build of **llama.cpp** serving two models (fine-tuned + base) with an
 embedded SvelteKit UI. It requires CUDA (tested on RTX 3060 12 GB).
 
 - UI source: `server/ui/` (our SvelteKit app)
-- Inference engine: `server/llama.cpp/` (git submodule, clean upstream)
+- Inference engine: `server/llama.cpp/` (git submodule, clean upstream — do not modify)
 
 ### Prerequisites
 
