@@ -73,23 +73,18 @@ embedded SvelteKit UI. It requires CUDA (tested on RTX 3060 12 GB).
 
 ```bash
 git submodule update --init server/llama.cpp
-# Apply the one-line CMake patch that enables -DLLAMA_UI_SOURCE_DIR override
-git apply server/patches/llama-cpp-ui-source-dir.patch
 ```
 
 ### Build
 
 ```bash
-# 1. Build the UI and embed constitutions (reads server/constitutions.json)
-cd server/ui
-npm install
-npm run build          # runs generate-constitutions.mjs then vite build
+# One command — builds UI, copies dist into the submodule (gitignored), compiles binary
+bash server/build.sh
 
-# 2. Compile the server binary with CUDA + embedded UI
-cd server/llama.cpp
-cmake -B build -DGGML_CUDA=ON -DCMAKE_BUILD_TYPE=Release \
-  -DLLAMA_UI_SOURCE_DIR=/path/to/spice-demo/server/ui
-cmake --build build --target llama-server -j$(nproc)
+# Or separately:
+bash server/build.sh --ui-only   # rebuild UI + copy dist after editing server/ui
+bash server/build.sh --bin-only  # recompile binary only (dist already in place)
+
 # Binary: server/llama.cpp/build/bin/llama-server
 ```
 
