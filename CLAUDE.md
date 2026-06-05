@@ -97,7 +97,7 @@ server/llama.cpp/build/bin/llama-server \
   --models-dir server/models \
   --models-max 1 \
   --jinja --chat-template-file server/chat_template.jinja \
-  --chat-template-kwargs '{"thinking_prefix": "The system prompt contains a CONSTITUTION I must follow. Let me reason through how it applies before responding."}' \
+  --chat-template-kwargs "$(python3 -c "import json; print(json.dumps(json.load(open('server/inference-config.json'))))")" \
   --host 0.0.0.0 --port 8000 \
   --n-gpu-layers 999 \
   --ctx-size 32768 --parallel 2 --cont-batching \
@@ -107,8 +107,9 @@ server/llama.cpp/build/bin/llama-server \
 Key flags:
 - `--models-dir` — router mode; the UI model selector switches between all `.gguf` files in that dir
 - `--models-max 1` — only one model in VRAM at a time (hot-swap on demand, fits a 12 GB card)
-- `--jinja --chat-template-file` — patched Jinja template that injects `thinking_prefix` when `has_constitution=true`
-- `--chat-template-kwargs` — sets `thinking_prefix`; only injected when the UI sends `has_constitution: true`
+- `--jinja --chat-template-file` — patched Jinja template; injects `thinking_prefix` into `<think>` when `has_constitution=true` per request
+- `--chat-template-kwargs` — provides `thinking_prefix` server-wide from `server/inference-config.json`. The prefix text must end with a forward-looking phrase (e.g. "before responding.") so the model continues generating reasoning after it — complete declarative endings cause the model to immediately close `<think>`
+- To change the prefix: edit `server/inference-config.json` and restart the server
 - `--n-gpu-layers 999` — offload all layers to GPU
 - `--ctx-size 32768 --parallel 2` — 16 K tokens per concurrent slot
 - `--reasoning-format deepseek` — exposes Qwen3 `<think>` tokens as `reasoning_content` in the API

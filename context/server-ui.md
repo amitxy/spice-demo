@@ -31,7 +31,7 @@ llama.cpp's `scripts/ui-assets.cmake` has a Priority 1 check: if `tools/ui/dist/
 server/llama.cpp/build/bin/llama-server \
   --models-dir server/models --models-max 1 \
   --jinja --chat-template-file server/chat_template.jinja \
-  --chat-template-kwargs '{"thinking_prefix": "The system prompt contains a CONSTITUTION I must follow. Let me reason through how it applies before responding."}' \
+  --chat-template-kwargs "$(python3 -c "import json; print(json.dumps(json.load(open('server/inference-config.json'))))")" \
   --host 0.0.0.0 --port 8000 \
   --n-gpu-layers 999 --ctx-size 32768 --parallel 2 --cont-batching \
   --reasoning-format deepseek --reasoning on
@@ -39,7 +39,6 @@ server/llama.cpp/build/bin/llama-server \
 
 - `--models-dir` + `--models-max 1`: router mode — hot-swaps GGUFs on demand, one loaded at a time
 - `--jinja --chat-template-file`: loads our custom Jinja template from a file (not a literal string)
-- `--chat-template-kwargs`: sets server-level `thinking_prefix`; only injected when UI sends `has_constitution: true`
 - `--reasoning-format deepseek`: exposes `<think>` tokens as `reasoning_content` in API responses
 
 UI: `http://localhost:8000` · Health: `GET /health` · Models: `GET /v1/models`
@@ -62,7 +61,7 @@ At generation time the template injects into `<think>` conditionally:
 {%- endif %}
 ```
 
-- `thinking_prefix` — set once at server startup via `--chat-template-kwargs`
+- `thinking_prefix` — sourced from `server/inference-config.json` two ways: (1) **server-level default** via `--chat-template-kwargs` at startup (always active); (2) **per-request override** sent by the UI (only active after a full `bash server/build.sh` binary recompile, since the binary embeds the UI at cmake time). To change the prefix, edit `server/inference-config.json` and restart the server (server-level takes effect immediately; UI per-request takes effect after next full build). **Critical**: the prefix text must end with a forward-looking phrase like "before responding." — a declarative ending causes the model to close `<think>` immediately without generating additional reasoning.
 - `has_constitution` — sent **per-request** by the UI (`chat_template_kwargs.has_constitution`); never set server-wide (doing so pollutes the KV cache on warmup requests)
 
 ## Constitutions
@@ -104,7 +103,8 @@ SvelteKit + Svelte 5 runes, static adapter, IndexedDB persistence via Dexie, Typ
 requestBody.chat_template_kwargs = {
     ...(requestBody.chat_template_kwargs ?? {}),
     enable_thinking: enableThinking,
-    has_constitution: hasConstitution ?? false
+    has_constitution: hasConstitution ?? false,
+    ...(hasConstitution && thinkingPrefix ? { thinking_prefix: thinkingPrefix } : {})
 };
 ```
 This avoids scanning the message list in the Jinja template on every generation.

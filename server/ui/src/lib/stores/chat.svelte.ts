@@ -12,6 +12,7 @@
  */
 
 import { SvelteMap } from 'svelte/reactivity';
+import { INFERENCE_CONFIG } from '$lib/data/inference-config';
 import { DatabaseService } from '$lib/services/database.service';
 import { ChatService } from '$lib/services/chat.service';
 import { conversationsStore } from '$lib/stores/conversations.svelte';
@@ -1922,6 +1923,9 @@ class ChatStore {
 		apiOptions.enableThinking = conversationsStore.getThinkingEnabled();
 		apiOptions.reasoningEffort = conversationsStore.getReasoningEffort();
 		apiOptions.hasConstitution = this.activePersonalityName != null;
+		if (apiOptions.hasConstitution) {
+			apiOptions.thinkingPrefix = INFERENCE_CONFIG.thinking_prefix;
+		}
 
 		if (hasValue(currentConfig.temperature))
 			apiOptions.temperature = Number(currentConfig.temperature);

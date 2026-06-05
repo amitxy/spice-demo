@@ -165,6 +165,7 @@ export class ChatService {
 			excludeReasoningFromContext,
 			enableThinking,
 			hasConstitution,
+			thinkingPrefix,
 			reasoningEffort,
 			continueFinalMessage
 		} = options;
@@ -253,7 +254,8 @@ export class ChatService {
 		requestBody.chat_template_kwargs = {
 			...(requestBody.chat_template_kwargs ?? {}),
 			enable_thinking: enableThinking,
-			has_constitution: hasConstitution ?? false
+			has_constitution: hasConstitution ?? false,
+			...(hasConstitution && thinkingPrefix ? { thinking_prefix: thinkingPrefix } : {})
 		};
 
 		if (reasoningBudgetTokens >= 0) {

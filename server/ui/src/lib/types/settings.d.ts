@@ -74,6 +74,8 @@ export interface SettingsChatServiceOptions {
 	enableThinking?: boolean;
 	// Whether a constitution is active — passed as chat_template_kwargs.has_constitution
 	hasConstitution?: boolean;
+	// Prefix injected into the <think> block when a constitution is active
+	thinkingPrefix?: string;
 	// Reasoning effort level (low/medium/high/max) for thinking models
 	reasoningEffort?: ReasoningEffort;
 	tools?: OpenAIToolDefinition[];

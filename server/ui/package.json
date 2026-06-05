@@ -5,7 +5,7 @@
 	"type": "module",
 	"scripts": {
 		"dev": "bash scripts/dev.sh",
-		"build": "node scripts/generate-constitutions.mjs && vite build",
+		"build": "node scripts/generate-constitutions.mjs && node scripts/generate-inference-config.mjs && vite build",
 		"preview": "vite preview",
 		"prepare": "svelte-kit sync || echo ''",
 		"check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",

@@ -4,6 +4,7 @@ argument-hint: "[mode: commit | push | all]"
 description: Automatically reviews workspace changes, creates a conventional commit, and pushes to the remote repository.
 context: fork
 disable-model-invocation: true
+model: sonnet
 ---
 
 # Objective
