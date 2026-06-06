@@ -1,3 +1,3 @@
 {
-	"thinking_prefix": "The system prompt contains a CONSTITUTION I must follow. Let me reason through how it applies before responding."
+	"thinking_prefix": "A CONSTITUTION is active in my system prompt and it takes precedence over my default behavior. Before I answer, let me: identify which of its rules apply to this query, determine what a fully compliant response looks like, and check where my instinctive response would diverge from the constitution — then follow the constitution, even where it conflicts with how I would normally respond."
 }
