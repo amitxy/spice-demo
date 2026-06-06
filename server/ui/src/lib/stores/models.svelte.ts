@@ -12,7 +12,8 @@ import { TTLCache } from '$lib/utils';
 import {
 	MODEL_PROPS_CACHE_TTL_MS,
 	MODEL_PROPS_CACHE_MAX_ENTRIES,
-	FAVORITE_MODELS_LOCALSTORAGE_KEY
+	FAVORITE_MODELS_LOCALSTORAGE_KEY,
+	DEFAULT_MODEL_ID
 } from '$lib/constants';
 
 import { conversationsStore } from '$lib/stores/conversations.svelte';
@@ -530,8 +531,9 @@ class ModelsStore {
 	 * Prioritizes:
 	 * 1. Model from active conversation's last assistant response (if loaded)
 	 * 2. Model from active conversation's last assistant response (if not loaded)
-	 * 3. First loaded model (not from active conversation)
-	 * 4. First available model
+	 * 3. Configured default model for a fresh visitor (DEFAULT_MODEL_ID)
+	 * 4. First loaded model (not from active conversation)
+	 * 5. First available model
 	 */
 	async ensureFirstModelSelected(): Promise<void> {
 		if (this.selectedModelName) return;
@@ -550,6 +552,16 @@ class ModelsStore {
 				}
 				return;
 			}
+		}
+
+		// Fresh visitor: prefer the configured default model if it's available.
+		const defaultModel = availableModels.find((m) => m.model === DEFAULT_MODEL_ID);
+		if (defaultModel) {
+			await this.selectModelById(defaultModel.id);
+			if (this.isModelLoaded(defaultModel.model)) {
+				await this.fetchModelProps(defaultModel.model);
+			}
+			return;
 		}
 
 		// Try a loaded model first

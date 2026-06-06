@@ -1,6 +1,12 @@
 /** Sentinel value returned by `indexOf` when a substring is not found. */
 export const MODEL_ID_NOT_FOUND = -1;
 
+/**
+ * Model preferred as the default selection for a fresh visitor (no prior
+ * conversation / no model picked yet). Matched against `ModelOption.model`.
+ */
+export const DEFAULT_MODEL_ID = 'spice-finetuned';
+
 /** Separates `<org>` from `<model>` in a model ID, e.g. `org/ModelName`. */
 export const MODEL_ID_ORG_SEPARATOR = '/';
 
