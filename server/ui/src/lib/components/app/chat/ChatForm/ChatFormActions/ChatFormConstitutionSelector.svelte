@@ -30,6 +30,13 @@
 		}
 		open = false;
 	}
+
+	// "None" isn't a personality — it cancels the active one and reverts to default behavior.
+	async function selectNone() {
+		activeConstitutionName = null;
+		await chatStore.clearConstitution();
+		open = false;
+	}
 </script>
 
 <DropdownMenu.Root bind:open>
@@ -73,5 +80,25 @@
 				</div>
 			</button>
 		{/each}
+
+		<button
+			type="button"
+			class="flex w-full cursor-pointer items-start gap-2 rounded-lg px-2.5 py-2 text-left text-sm transition-colors hover:bg-accent"
+			class:bg-accent={activeConstitutionName === null}
+			onclick={selectNone}
+		>
+			{#if activeConstitutionName === null}
+				<Check class="mt-0.5 h-4 w-4 shrink-0 text-emerald-400" />
+			{:else}
+				<div class="mt-0.5 h-4 w-4 shrink-0"></div>
+			{/if}
+
+			<div class="min-w-0 flex-1">
+				<div class="font-medium">None</div>
+				<div class="mt-0.5 truncate text-[11px] text-muted-foreground">
+					Cancel the active personality and use default behavior
+				</div>
+			</div>
+		</button>
 	</DropdownMenu.Content>
 </DropdownMenu.Root>

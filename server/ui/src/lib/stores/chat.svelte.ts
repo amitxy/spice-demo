@@ -536,6 +536,46 @@ class ChatStore {
 		}
 	}
 
+	/**
+	 * Cancels the active personality and reverts to the model's default behavior.
+	 * Clears `activePersonalityName` (so subsequent messages are stamped "None" and
+	 * `has_constitution` is false) and strips the `<CONSTITUTION>` system message from
+	 * the conversation tree so it is no longer sent to the model.
+	 */
+	async clearConstitution(): Promise<void> {
+		this.activePersonalityName = null;
+		const activeConv = conversationsStore.activeConversation;
+		if (!activeConv) return;
+		try {
+			const allMessages = await conversationsStore.getConversationMessages(activeConv.id);
+			const rootMessage = allMessages.find((m) => m.type === 'root' && m.parent === null);
+			if (!rootMessage) return;
+			const systemMessage = allMessages.find(
+				(m) => m.role === MessageRole.SYSTEM && m.parent === rootMessage.id
+			);
+			// Only strip a constitution-bearing system message; leave plain system prompts intact.
+			if (!systemMessage || !systemMessage.content.startsWith('<CONSTITUTION>')) return;
+			for (const childId of systemMessage.children) {
+				await DatabaseService.updateMessage(childId, { parent: rootMessage.id });
+				const childIndex = conversationsStore.findMessageIndex(childId);
+				if (childIndex !== -1)
+					conversationsStore.updateMessageAtIndex(childIndex, { parent: rootMessage.id });
+			}
+			await DatabaseService.updateMessage(rootMessage.id, {
+				children: [
+					...rootMessage.children.filter((id: string) => id !== systemMessage.id),
+					...systemMessage.children
+				]
+			});
+			await DatabaseService.deleteMessage(systemMessage.id);
+			const systemIndex = conversationsStore.findMessageIndex(systemMessage.id);
+			if (systemIndex !== -1) conversationsStore.activeMessages.splice(systemIndex, 1);
+			conversationsStore.updateConversationTimestamp();
+		} catch (error) {
+			console.error('Failed to clear constitution:', error);
+		}
+	}
+
 	async removeSystemPromptPlaceholder(messageId: string): Promise<boolean> {
 		const activeConv = conversationsStore.activeConversation;
 		if (!activeConv) return false;
