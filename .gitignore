@@ -1,3 +1,6 @@
 .env
 __pycache__/
 server/models/
+
+# Runtime artifact: current public tunnel URL, regenerated on each boot
+PUBLIC_URL.txt
