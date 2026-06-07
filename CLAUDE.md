@@ -39,6 +39,8 @@ python -m src.train.sft_train --data-path data/processed/train.jsonl --output-pa
 ## Inference server (`server/`)
 
 > Full architecture detail — build mechanism, chat template injection, UI store/service layer, constitution flow — is in **`context/server-ui.md`**.
+>
+> For a self-contained Docker image (models baked in, one-click Vast.ai deploy) see **`context/docker.md`** — built by the root `Dockerfile` + `docker/`.
 
 The server is a customized build of **llama.cpp** serving two models (fine-tuned + base) with an
 embedded SvelteKit UI. It requires CUDA (tested on RTX 3060 12 GB).

@@ -1,0 +1,40 @@
+# Keep the build context tiny. Models are downloaded in-build (model-fetcher
+# stage) and llama.cpp is cloned in-build (bin-builder stage), so neither needs
+# to be sent to the daemon.
+
+# Heavy / generated artifacts
+server/models/
+server/llama.cpp/
+**/node_modules/
+**/.svelte-kit/
+**/dist/
+server/ui/build/
+server/ui/test-results/
+results/
+
+# Data: only data/constitutions/ is needed (UI build embeds it); exclude the rest
+data/raw/
+data/interim/
+data/processed/
+
+# VCS / tooling / local
+.git/
+.github/
+.venv/
+__pycache__/
+**/*.pyc
+# Exclude env/secret files at ANY depth (root-anchored patterns would miss nested ones)
+**/.env
+**/.env.*
+.hf_token
+**/*.pem
+**/*.key
+**/id_rsa*
+PUBLIC_URL.txt
+*.log
+
+# Docs and dev-only dirs not needed in the image build
+context/
+notebooks/
+src/
+tests/
