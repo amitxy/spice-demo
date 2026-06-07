@@ -57,7 +57,7 @@ RUN --mount=type=secret,id=hf_token \
     HF_TOKEN="$(cat /run/secrets/hf_token 2>/dev/null || true)" \
     python - <<'PY'
 import os, sys, shutil
-from huggingface_hub import hf_hub_download
+from huggingface_hub import hf_hub_download, list_repo_files
 
 token = (os.environ.get("HF_TOKEN") or "").strip() or None
 print(f"[model-fetcher] HF token present: {bool(token)} (len={len(token or '')})", flush=True)
@@ -79,13 +79,20 @@ fetch("unsloth/Qwen3.5-9B-GGUF", "Qwen3.5-9B-Q4_K_M.gguf",
 
 # Finetuned model (PRIVATE repo -> token required). Fail fast with a clear
 # message rather than a confusing 401 if the HF_TOKEN secret is missing.
+FT_REPO = "Amitxy/spice-qwen3.5-9b-constitution-sft-gguf"
 if not token:
-    sys.exit("[model-fetcher] ERROR: HF_TOKEN secret is empty, but the finetuned "
-             "repo Amitxy/spice-qwen3.5-9b-constitution-sft-gguf is private. Add an "
-             "HF_TOKEN repository secret (Actions) whose token can read that repo.")
-# Filename must be spice-finetuned.gguf (the UI's default model id).
-fetch("Amitxy/spice-qwen3.5-9b-constitution-sft-gguf", "finetuned-model.gguf",
-      "/models/spice-finetuned.gguf", token=token)
+    sys.exit(f"[model-fetcher] ERROR: HF_TOKEN secret is empty, but {FT_REPO} is "
+             "private. Add an HF_TOKEN repository secret (Actions) whose token can "
+             "read that repo.")
+# Auto-detect the .gguf filename in the repo (the exact name isn't hardcoded, so a
+# renamed/re-uploaded checkpoint keeps working). Saved as spice-finetuned.gguf -
+# the UI's default model id.
+ft_files = [f for f in list_repo_files(FT_REPO, token=token) if f.endswith(".gguf")]
+if not ft_files:
+    sys.exit(f"[model-fetcher] ERROR: no .gguf found in {FT_REPO}. "
+             f"files: {list_repo_files(FT_REPO, token=token)}")
+print(f"[model-fetcher] {FT_REPO} gguf candidates: {ft_files}", flush=True)
+fetch(FT_REPO, ft_files[0], "/models/spice-finetuned.gguf", token=token)
 
 print("[model-fetcher] models ready:", os.listdir("/models"), flush=True)
 PY
