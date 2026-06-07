@@ -21,7 +21,9 @@ COPY server/ui/ server/ui/
 COPY server/constitutions.json server/inference-config.json server/
 COPY data/constitutions/ data/constitutions/
 WORKDIR /build/server/ui
-RUN npm ci
+# npm ci is reproducible but hard-fails if the lockfile drifts; fall back to
+# npm install so a minor drift doesn't break the build (matches server/build.sh).
+RUN npm ci || npm install
 RUN npm run build   # -> /build/server/ui/dist
 
 # ---------------------------------------------------------------------------
@@ -122,7 +124,10 @@ WORKDIR /app
 COPY --from=model-fetcher /models /app/models
 # Binary + all its shared libs (libggml*, libllama, ...).
 COPY --from=bin-builder /llama.cpp/build/bin/ /app/bin/
-ENV LD_LIBRARY_PATH=/app/bin
+# APPEND, do not overwrite: the nvidia/cuda base sets LD_LIBRARY_PATH to the
+# driver path (/usr/local/nvidia/lib64) where the container runtime exposes the
+# real libcuda.so.1 at runtime. Overwriting it would break CUDA at startup.
+ENV LD_LIBRARY_PATH=/app/bin:${LD_LIBRARY_PATH}
 # Runtime config + entrypoint.
 COPY server/chat_template.jinja server/inference-config.json /app/
 COPY docker/entrypoint.sh /app/entrypoint.sh

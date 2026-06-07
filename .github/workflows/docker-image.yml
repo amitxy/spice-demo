@@ -39,6 +39,19 @@ jobs:
           swap-storage: true
           docker-images: false
 
+      # The runtime stage copies the ~10.7 GB models into a new layer (so models
+      # exist twice on disk) on top of the CUDA devel layer. Point Docker at the
+      # runner's larger /mnt disk (~65 GB) so the final stage doesn't run out of
+      # space after the long compile. Must happen before the buildx builder starts.
+      - name: Move Docker storage to the larger /mnt disk
+        run: |
+          sudo systemctl stop docker docker.socket || true
+          sudo mkdir -p /mnt/docker
+          echo '{"data-root":"/mnt/docker"}' | sudo tee /etc/docker/daemon.json
+          sudo systemctl start docker
+          docker info --format 'Docker root dir: {{.DockerRootDir}}'
+          df -h /mnt /
+
       - name: Checkout
         uses: actions/checkout@v4
 
