@@ -37,6 +37,13 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 RUN git clone https://github.com/ggerganov/llama.cpp.git /llama.cpp \
     && git -C /llama.cpp checkout ${LLAMA_CPP_COMMIT}
+# This build host has no NVIDIA driver, so libcuda.so.1 is absent. Expose the
+# CUDA toolkit's driver *stub* (libcuda.so) under the soname libcuda.so.1 so the
+# final link resolves the cuMem*/cuDevice* symbols. -rpath-link is link-time
+# only (not baked into the binary), so at runtime the GPU host's real driver is
+# used. This is why a GPU-less builder can compile a CUDA binary.
+ENV LIBRARY_PATH=/usr/local/cuda/lib64/stubs
+RUN ln -sf /usr/local/cuda/lib64/stubs/libcuda.so /usr/local/cuda/lib64/stubs/libcuda.so.1
 # Priority-1 path in llama.cpp's ui-assets.cmake: prebuilt dist is used as-is
 # and its own npm build is skipped (mirrors server/build.sh).
 COPY --from=ui-builder /build/server/ui/dist /llama.cpp/tools/ui/dist
@@ -45,6 +52,8 @@ RUN cmake -S /llama.cpp -B /llama.cpp/build \
         -DCMAKE_BUILD_TYPE=Release \
         -DLLAMA_BUILD_UI=OFF \
         -DCMAKE_CUDA_ARCHITECTURES="${CUDA_ARCHS}" \
+        -DCMAKE_EXE_LINKER_FLAGS="-Wl,-rpath-link,/usr/local/cuda/lib64/stubs" \
+        -DCMAKE_SHARED_LINKER_FLAGS="-Wl,-rpath-link,/usr/local/cuda/lib64/stubs" \
     && cmake --build /llama.cpp/build --target llama-server -j"$(nproc)"
 
 # ---------------------------------------------------------------------------
