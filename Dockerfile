@@ -51,25 +51,43 @@ RUN cmake -S /llama.cpp -B /llama.cpp/build \
 # Stage 3: download both GGUF models (token only present during this RUN)
 # ---------------------------------------------------------------------------
 FROM python:3.12-slim AS model-fetcher
-RUN pip install --no-cache-dir "huggingface_hub>=0.23"
+RUN pip install --no-cache-dir "huggingface_hub>=0.23,<1.0"
 # hf_token is a BuildKit secret -> never written to an image layer.
 RUN --mount=type=secret,id=hf_token \
     HF_TOKEN="$(cat /run/secrets/hf_token 2>/dev/null || true)" \
     python - <<'PY'
-import os
+import os, sys, shutil
 from huggingface_hub import hf_hub_download
-token = os.environ.get("HF_TOKEN") or None
+
+token = (os.environ.get("HF_TOKEN") or "").strip() or None
+print(f"[model-fetcher] HF token present: {bool(token)} (len={len(token or '')})", flush=True)
+print(f"[model-fetcher] free disk on /: {shutil.disk_usage('/').free/1e9:.1f} GB", flush=True)
 os.makedirs("/models", exist_ok=True)
-# Base model (public). Filename becomes the UI model id "qwen3.5-9b-base".
-base = hf_hub_download("unsloth/Qwen3.5-9B-GGUF", "Qwen3.5-9B-Q4_K_M.gguf",
-                       local_dir="/dl", token=token)
-os.replace(base, "/models/qwen3.5-9b-base.gguf")
-# Finetuned model (private repo -> needs token). Filename must be
-# "spice-finetuned.gguf" because that is the UI's default model id.
-ft = hf_hub_download("Amitxy/spice-qwen3.5-9b-constitution-sft-gguf",
-                     "finetuned-model.gguf", local_dir="/dl", token=token)
-os.replace(ft, "/models/spice-finetuned.gguf")
-print("models ready:", os.listdir("/models"))
+
+def fetch(repo, fname, dest, token=None):
+    print(f"[model-fetcher] downloading {repo}/{fname} ...", flush=True)
+    try:
+        p = hf_hub_download(repo, fname, local_dir="/dl", token=token)
+    except Exception as e:
+        sys.exit(f"[model-fetcher] FAILED to download {repo}/{fname}: {type(e).__name__}: {e}")
+    os.replace(p, dest)
+    print(f"[model-fetcher]   -> {dest} ({os.path.getsize(dest)/1e9:.2f} GB)", flush=True)
+
+# Base model (public) -> UI model id "qwen3.5-9b-base".
+fetch("unsloth/Qwen3.5-9B-GGUF", "Qwen3.5-9B-Q4_K_M.gguf",
+      "/models/qwen3.5-9b-base.gguf", token=token)
+
+# Finetuned model (PRIVATE repo -> token required). Fail fast with a clear
+# message rather than a confusing 401 if the HF_TOKEN secret is missing.
+if not token:
+    sys.exit("[model-fetcher] ERROR: HF_TOKEN secret is empty, but the finetuned "
+             "repo Amitxy/spice-qwen3.5-9b-constitution-sft-gguf is private. Add an "
+             "HF_TOKEN repository secret (Actions) whose token can read that repo.")
+# Filename must be spice-finetuned.gguf (the UI's default model id).
+fetch("Amitxy/spice-qwen3.5-9b-constitution-sft-gguf", "finetuned-model.gguf",
+      "/models/spice-finetuned.gguf", token=token)
+
+print("[model-fetcher] models ready:", os.listdir("/models"), flush=True)
 PY
 
 # ---------------------------------------------------------------------------
