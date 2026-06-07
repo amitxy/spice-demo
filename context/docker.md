@@ -16,8 +16,10 @@ This is a **parallel** deployment path; the hand-provisioned box (with
 | config (`/app`) | `chat_template.jinja`, `inference-config.json`, `entrypoint.sh` |
 | tools | `cloudflared`, `tini`, `curl`, `python3` |
 
-Built by `Dockerfile` (4 stages: `ui-builder` → `bin-builder` → `model-fetcher`
-→ `runtime`). Final image ~12–13 GB.
+Built by `Dockerfile` (3 stages: `ui-builder` → `bin-builder` → `runtime`; the
+models are downloaded in the `runtime` stage so they're materialized once, not
+duplicated across stages — which keeps the build inside the CI runner's disk).
+Final image ~12–13 GB.
 
 ## Prerequisites
 
@@ -62,7 +64,7 @@ IMAGE=ghcr.io/amitxy/spice-demo:dev CUDA_ARCHS="86" bash docker/build-and-push.s
   (Turing) or `90` (Hopper) to run on more GPUs, at the cost of build time. A
   single arch (e.g. `86` for a 3060/3090) builds fastest.
 - The HF token is passed as a **BuildKit secret** (`--secret`) — it is used only
-  in the `model-fetcher` RUN and never written to an image layer.
+  in the model-download RUN and never written to an image layer.
 - **Where to build:** the 10.7 GB model layer is pushed **once** (cached on later
   code changes). Build/push from a fast-uplink host. This Vast box can't build
   unless it has a working Docker daemon (DinD is unreliable) — prefer a normal

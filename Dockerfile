@@ -2,7 +2,7 @@
 #
 # Self-contained image for the spice-demo inference server: a CUDA build of
 # llama.cpp with the embedded SvelteKit UI and both GGUF models baked in.
-# Multi-stage: ui-builder -> bin-builder -> model-fetcher -> runtime.
+# Multi-stage: ui-builder -> bin-builder -> runtime (models baked in runtime).
 #
 # Build (BuildKit required, HF token needed for the private finetuned repo):
 #   DOCKER_BUILDKIT=1 docker build --secret id=hf_token,src=./.hf_token \
@@ -59,69 +59,65 @@ RUN cmake -S /llama.cpp -B /llama.cpp/build \
     && cmake --build /llama.cpp/build --target llama-server -j"$(nproc)"
 
 # ---------------------------------------------------------------------------
-# Stage 3: download both GGUF models (token only present during this RUN)
-# ---------------------------------------------------------------------------
-FROM python:3.12-slim AS model-fetcher
-RUN pip install --no-cache-dir "huggingface_hub>=0.23,<1.0"
-# hf_token is a BuildKit secret -> never written to an image layer.
-RUN --mount=type=secret,id=hf_token \
-    HF_TOKEN="$(cat /run/secrets/hf_token 2>/dev/null || true)" \
-    python - <<'PY'
-import os, sys, shutil
-from huggingface_hub import hf_hub_download, list_repo_files
-
-token = (os.environ.get("HF_TOKEN") or "").strip() or None
-print(f"[model-fetcher] HF token present: {bool(token)} (len={len(token or '')})", flush=True)
-print(f"[model-fetcher] free disk on /: {shutil.disk_usage('/').free/1e9:.1f} GB", flush=True)
-os.makedirs("/models", exist_ok=True)
-
-def fetch(repo, fname, dest, token=None):
-    print(f"[model-fetcher] downloading {repo}/{fname} ...", flush=True)
-    try:
-        p = hf_hub_download(repo, fname, local_dir="/dl", token=token)
-    except Exception as e:
-        sys.exit(f"[model-fetcher] FAILED to download {repo}/{fname}: {type(e).__name__}: {e}")
-    os.replace(p, dest)
-    print(f"[model-fetcher]   -> {dest} ({os.path.getsize(dest)/1e9:.2f} GB)", flush=True)
-
-# Base model (public) -> UI model id "qwen3.5-9b-base".
-fetch("unsloth/Qwen3.5-9B-GGUF", "Qwen3.5-9B-Q4_K_M.gguf",
-      "/models/qwen3.5-9b-base.gguf", token=token)
-
-# Finetuned model (PRIVATE repo -> token required). Fail fast with a clear
-# message rather than a confusing 401 if the HF_TOKEN secret is missing.
-FT_REPO = "Amitxy/spice-qwen3.5-9b-constitution-sft-gguf"
-if not token:
-    sys.exit(f"[model-fetcher] ERROR: HF_TOKEN secret is empty, but {FT_REPO} is "
-             "private. Add an HF_TOKEN repository secret (Actions) whose token can "
-             "read that repo.")
-# Auto-detect the .gguf filename in the repo (the exact name isn't hardcoded, so a
-# renamed/re-uploaded checkpoint keeps working). Saved as spice-finetuned.gguf -
-# the UI's default model id.
-ft_files = [f for f in list_repo_files(FT_REPO, token=token) if f.endswith(".gguf")]
-if not ft_files:
-    sys.exit(f"[model-fetcher] ERROR: no .gguf found in {FT_REPO}. "
-             f"files: {list_repo_files(FT_REPO, token=token)}")
-print(f"[model-fetcher] {FT_REPO} gguf candidates: {ft_files}", flush=True)
-fetch(FT_REPO, ft_files[0], "/models/spice-finetuned.gguf", token=token)
-
-print("[model-fetcher] models ready:", os.listdir("/models"), flush=True)
-PY
-
-# ---------------------------------------------------------------------------
-# Stage 4: lean runtime image
+# Stage 3: lean runtime image. Models are downloaded *here* (not in a separate
+# stage) so they're materialized once, not duplicated across a fetcher layer and
+# a copied layer -- which keeps the build inside the runner's disk budget.
 # ---------------------------------------------------------------------------
 FROM nvidia/cuda:12.4.1-runtime-ubuntu22.04 AS runtime
 RUN apt-get update && apt-get install -y --no-install-recommends \
-        ca-certificates curl python3 tini \
+        ca-certificates curl python3 python3-pip tini \
     && curl -fsSL -o /usr/local/bin/cloudflared \
         https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64 \
     && chmod +x /usr/local/bin/cloudflared \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
-# Models first: large, stable layer -> stays cached across code/config changes.
-COPY --from=model-fetcher /models /app/models
+
+# Download both GGUF models into a single early layer (~10.7 GB, baked). Kept
+# early + before the binary/config COPYs so it stays cache-stable across code
+# changes. hf_token is a BuildKit secret -> never written to a layer. /tmp/dl
+# scratch is removed in the same RUN so it doesn't bloat the layer.
+RUN python3 -m pip install --no-cache-dir "huggingface_hub>=0.23,<1.0"
+RUN --mount=type=secret,id=hf_token \
+    HF_TOKEN="$(cat /run/secrets/hf_token 2>/dev/null || true)" \
+    python3 - <<'PY'
+import os, sys, shutil
+from huggingface_hub import hf_hub_download, list_repo_files
+
+token = (os.environ.get("HF_TOKEN") or "").strip() or None
+print(f"[models] HF token present: {bool(token)} (len={len(token or '')})", flush=True)
+print(f"[models] free disk: {shutil.disk_usage('/').free/1e9:.1f} GB", flush=True)
+os.makedirs("/app/models", exist_ok=True)
+
+def fetch(repo, fname, dest, token=None):
+    print(f"[models] downloading {repo}/{fname} ...", flush=True)
+    try:
+        p = hf_hub_download(repo, fname, local_dir="/tmp/dl", token=token)
+    except Exception as e:
+        sys.exit(f"[models] FAILED {repo}/{fname}: {type(e).__name__}: {e}")
+    os.replace(p, dest)
+    print(f"[models]   -> {dest} ({os.path.getsize(dest)/1e9:.2f} GB)", flush=True)
+
+# Base model (public) -> UI model id "qwen3.5-9b-base".
+fetch("unsloth/Qwen3.5-9B-GGUF", "Qwen3.5-9B-Q4_K_M.gguf",
+      "/app/models/qwen3.5-9b-base.gguf", token=token)
+
+# Finetuned model (PRIVATE -> token required). Auto-detect the .gguf filename so a
+# renamed checkpoint keeps working. Saved as spice-finetuned.gguf (UI default id).
+FT_REPO = "Amitxy/spice-qwen3.5-9b-constitution-sft-gguf"
+if not token:
+    sys.exit(f"[models] ERROR: HF_TOKEN secret is empty, but {FT_REPO} is private. "
+             "Add an HF_TOKEN repository secret whose token can read that repo.")
+ggufs = [f for f in list_repo_files(FT_REPO, token=token) if f.endswith(".gguf")]
+if not ggufs:
+    sys.exit(f"[models] ERROR: no .gguf in {FT_REPO}: {list_repo_files(FT_REPO, token=token)}")
+print(f"[models] {FT_REPO} gguf candidates: {ggufs}", flush=True)
+fetch(FT_REPO, ggufs[0], "/app/models/spice-finetuned.gguf", token=token)
+
+shutil.rmtree("/tmp/dl", ignore_errors=True)
+print("[models] ready:", os.listdir("/app/models"), flush=True)
+PY
+
 # Binary + all its shared libs (libggml*, libllama, ...).
 COPY --from=bin-builder /llama.cpp/build/bin/ /app/bin/
 # APPEND, do not overwrite: the nvidia/cuda base sets LD_LIBRARY_PATH to the
