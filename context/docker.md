@@ -28,7 +28,28 @@ Built by `Dockerfile` (4 stages: `ui-builder` → `bin-builder` → `model-fetch
   Resolved from `$HF_TOKEN` or `huggingface_api_key` in `.env`.
 - `docker login ghcr.io` once (a GitHub PAT with `write:packages`).
 
-## Build & push
+## Build & push — GitHub Actions (recommended, no local Docker)
+
+`.github/workflows/docker-image.yml` builds and pushes to ghcr **inside
+GitHub's network** (fast push, no egress cost, HF token stays an encrypted
+secret). One-time setup:
+
+1. **Add the HF token** as a repo secret: GitHub → Settings → Secrets and
+   variables → Actions → New repository secret → name `HF_TOKEN`, value = your
+   Hugging Face token (needs access to the private finetuned repo).
+2. **Run it:** Actions tab → "Build & push server image" → *Run workflow*
+   (optional inputs: `tag`, `cuda_archs`). Or push a `v*` git tag.
+3. **First push creates a *private* package.** To make pulls free, set it public:
+   your profile → Packages → `spice-demo` → Package settings → Change visibility →
+   Public. (Keep private only if you accept ghcr private storage/egress costs.)
+
+The build takes ~30–45 min (CUDA compile + ~10.7 GB model download). It is **not**
+triggered on every commit on purpose — run it when you want a new image.
+
+> Free GitHub runners have limited disk for a ~13 GB image; the workflow runs a
+> disk-reclaim step (`jlumbroso/free-disk-space`) to make room.
+
+## Build & push — local Docker (alternative)
 
 ```bash
 docker login ghcr.io
