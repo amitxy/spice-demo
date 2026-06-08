@@ -9,6 +9,9 @@ CFG=/app/inference-config.json
 CF_LOG=/tmp/cloudflared.log
 URL_FILE=/app/PUBLIC_URL.txt
 
+# Key-based SSH (Vast injects your key via PUBLIC_KEY). No-op without a key.
+[ -x /app/ssh-setup.sh ] && /app/ssh-setup.sh || true
+
 # Public access #1 — Vast maps EXPOSE 8000 to a host:port automatically.
 # Public access #2 — cloudflared quick tunnel (toggle with ENABLE_TUNNEL=false).
 if [ "${ENABLE_TUNNEL:-true}" = "true" ]; then

@@ -65,7 +65,7 @@ RUN cmake -S /llama.cpp -B /llama.cpp/build \
 # ---------------------------------------------------------------------------
 FROM nvidia/cuda:12.4.1-runtime-ubuntu22.04 AS runtime
 RUN apt-get update && apt-get install -y --no-install-recommends \
-        ca-certificates curl python3 python3-pip tini \
+        ca-certificates curl python3 python3-pip tini openssh-server \
     && curl -fsSL -o /usr/local/bin/cloudflared \
         https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64 \
     && chmod +x /usr/local/bin/cloudflared \
@@ -124,10 +124,11 @@ COPY --from=bin-builder /llama.cpp/build/bin/ /app/bin/
 # driver path (/usr/local/nvidia/lib64) where the container runtime exposes the
 # real libcuda.so.1 at runtime. Overwriting it would break CUDA at startup.
 ENV LD_LIBRARY_PATH=/app/bin:${LD_LIBRARY_PATH}
-# Runtime config + entrypoint.
+# Runtime config + entrypoint + SSH setup.
 COPY server/chat_template.jinja server/inference-config.json /app/
 COPY docker/entrypoint.sh /app/entrypoint.sh
-RUN chmod +x /app/entrypoint.sh
+COPY docker/ssh-setup.sh /app/ssh-setup.sh
+RUN chmod +x /app/entrypoint.sh /app/ssh-setup.sh
 
 # Tunables (override at `docker run`/Vast launch with -e).
 ENV PORT=8000 \
@@ -137,5 +138,6 @@ ENV PORT=8000 \
     N_GPU_LAYERS=999 \
     ENABLE_TUNNEL=true
 
-EXPOSE 8000
+# 8000 = inference/UI, 22 = SSH (key-only, started when PUBLIC_KEY is set).
+EXPOSE 8000 22
 ENTRYPOINT ["/usr/bin/tini", "--", "/app/entrypoint.sh"]
