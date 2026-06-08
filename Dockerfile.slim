@@ -1,0 +1,86 @@
+# syntax=docker/dockerfile:1.7
+#
+# SLIM variant of the spice-demo server image: same CUDA llama.cpp build + embedded
+# UI, but WITHOUT the GGUF models baked in (~2.5 GB instead of ~13 GB). The models
+# are downloaded on first boot by docker/entrypoint-slim.sh into $MODELS_DIR (mount
+# a persistent volume there so it happens once). Requires HF_TOKEN at runtime.
+#
+# This is additive: the baked-in image (Dockerfile / :latest) is untouched.
+#
+# Build (no HF token needed at build time):
+#   DOCKER_BUILDKIT=1 docker build -f Dockerfile.slim -t ghcr.io/amitxy/spice-demo:slim .
+
+# ---------------------------------------------------------------------------
+# Stage 1: build the SvelteKit UI (constitutions + inference-config embedded)
+# ---------------------------------------------------------------------------
+FROM node:22-bookworm-slim AS ui-builder
+WORKDIR /build
+COPY server/ui/ server/ui/
+COPY server/constitutions.json server/inference-config.json server/
+COPY data/constitutions/ data/constitutions/
+WORKDIR /build/server/ui
+RUN npm ci || npm install
+RUN npm run build   # -> /build/server/ui/dist
+
+# ---------------------------------------------------------------------------
+# Stage 2: compile llama-server (CUDA) with the UI dist embedded
+# ---------------------------------------------------------------------------
+FROM nvidia/cuda:12.4.1-devel-ubuntu22.04 AS bin-builder
+ARG LLAMA_CPP_COMMIT=a731805cedc83c0514cbd808a2e38ec46c759cc2
+ARG CUDA_ARCHS=80;86;89
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        git cmake build-essential ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+RUN git clone https://github.com/ggerganov/llama.cpp.git /llama.cpp \
+    && git -C /llama.cpp checkout ${LLAMA_CPP_COMMIT}
+# GPU-less builder: link against the CUDA driver stub (see Dockerfile for the
+# full rationale). -rpath-link is link-time only; the real driver is used at runtime.
+ENV LIBRARY_PATH=/usr/local/cuda/lib64/stubs
+RUN ln -sf /usr/local/cuda/lib64/stubs/libcuda.so /usr/local/cuda/lib64/stubs/libcuda.so.1
+COPY --from=ui-builder /build/server/ui/dist /llama.cpp/tools/ui/dist
+RUN cmake -S /llama.cpp -B /llama.cpp/build \
+        -DGGML_CUDA=ON \
+        -DCMAKE_BUILD_TYPE=Release \
+        -DLLAMA_BUILD_UI=OFF \
+        -DCMAKE_CUDA_ARCHITECTURES="${CUDA_ARCHS}" \
+        -DCMAKE_EXE_LINKER_FLAGS="-Wl,-rpath-link,/usr/local/cuda/lib64/stubs" \
+        -DCMAKE_SHARED_LINKER_FLAGS="-Wl,-rpath-link,/usr/local/cuda/lib64/stubs" \
+    && cmake --build /llama.cpp/build --target llama-server -j"$(nproc)"
+
+# ---------------------------------------------------------------------------
+# Stage 3: lean runtime image WITHOUT models (downloaded on first boot)
+# ---------------------------------------------------------------------------
+FROM nvidia/cuda:12.4.1-runtime-ubuntu22.04 AS runtime
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        ca-certificates curl python3 python3-pip tini openssh-server \
+    && curl -fsSL -o /usr/local/bin/cloudflared \
+        https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64 \
+    && chmod +x /usr/local/bin/cloudflared \
+    && rm -rf /var/lib/apt/lists/*
+# huggingface_hub is needed at RUNTIME (the entrypoint downloads models on boot).
+RUN python3 -m pip install --no-cache-dir "huggingface_hub>=0.23,<1.0"
+
+WORKDIR /app
+COPY --from=bin-builder /llama.cpp/build/bin/ /app/bin/
+# APPEND so the nvidia base's driver path (real libcuda.so.1) survives.
+ENV LD_LIBRARY_PATH=/app/bin:${LD_LIBRARY_PATH}
+COPY server/chat_template.jinja server/inference-config.json /app/
+COPY server/download_models.py /app/download_models.py
+COPY docker/entrypoint-slim.sh /app/entrypoint.sh
+COPY docker/ssh-setup.sh /app/ssh-setup.sh
+RUN chmod +x /app/entrypoint.sh /app/ssh-setup.sh
+
+# Tunables. MODELS_DIR is where models are downloaded/looked up -- mount a
+# persistent volume here so the download happens only once.
+ENV PORT=8000 \
+    CTX_SIZE=32768 \
+    PARALLEL=2 \
+    MODELS_MAX=1 \
+    N_GPU_LAYERS=999 \
+    ENABLE_TUNNEL=true \
+    MODELS_DIR=/models
+VOLUME ["/models"]
+
+# 8000 = inference/UI, 22 = SSH (key-only, started when PUBLIC_KEY is set).
+EXPOSE 8000 22
+ENTRYPOINT ["/usr/bin/tini", "--", "/app/entrypoint.sh"]
