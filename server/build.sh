@@ -28,10 +28,14 @@ build_ui() {
 build_binary() {
     echo "==> Configuring llama.cpp..."
     cd "$LLAMA_DIR"
+    # CUDA_ARCHS (optional): pin the GPU architecture(s), e.g. "86" for an RTX 3060.
+    # Empty (default) leaves llama.cpp's all-architecture default, which is much
+    # slower to compile. See bootstrap.sh, which auto-detects and passes this.
     cmake -B build \
         -DGGML_CUDA=ON \
         -DCMAKE_BUILD_TYPE=Release \
-        -DLLAMA_BUILD_UI=OFF
+        -DLLAMA_BUILD_UI=OFF \
+        ${CUDA_ARCHS:+-DCMAKE_CUDA_ARCHITECTURES="$CUDA_ARCHS"}
     echo "==> Compiling llama-server..."
     cmake --build build --target llama-server -j"$(nproc)"
     echo "==> Binary: $LLAMA_DIR/build/bin/llama-server"
