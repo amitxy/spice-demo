@@ -64,8 +64,11 @@ RUN cmake -S /llama.cpp -B /llama.cpp/build \
 # a copied layer -- which keeps the build inside the runner's disk budget.
 # ---------------------------------------------------------------------------
 FROM nvidia/cuda:12.4.1-runtime-ubuntu22.04 AS runtime
+# libgomp1: the CUDA-runtime base lacks the OpenMP runtime that the compiled
+# llama-server links against (without it the binary fails to load with
+# "libgomp.so.1: cannot open shared object file").
 RUN apt-get update && apt-get install -y --no-install-recommends \
-        ca-certificates curl python3 python3-pip tini openssh-server \
+        ca-certificates curl python3 python3-pip tini openssh-server libgomp1 \
     && curl -fsSL -o /usr/local/bin/cloudflared \
         https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64 \
     && chmod +x /usr/local/bin/cloudflared \
