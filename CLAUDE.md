@@ -42,6 +42,31 @@ python -m src.train.sft_train --data-path data/processed/train.jsonl --output-pa
 >
 > For a self-contained Docker image (models baked in, one-click Vast.ai deploy) see **`context/docker.md`** — built by the root `Dockerfile` + `docker/`.
 
+### Cloud deploy on Modal (`src/scripts/deploy_modal.py`)
+
+Runs the **full** public image (`ghcr.io/amitxy/spice-demo:latest`) on [Modal](https://modal.com)
+as a cheap on-demand demo: it serves the whole llama-server (UI at `/`, API at `/v1/*`) via
+`@modal.web_server(8000)` on an **A10G** GPU and **scales to zero** 120 s after the last request
+(`scaledown_window=120`) — no warm-up, nothing running while idle. Models are used straight from the
+baked-in `/app/models` (no Modal Volume needed).
+
+Unlike the other `src/scripts/*` (run as `python -m src.scripts.X`), this is driven by the **`modal`
+CLI**, not Python directly:
+
+```bash
+pip install modal            # uv isn't on every box; modal is a deploy-time tool, not a runtime dep
+modal token new              # or: modal token set --token-id ak-… --token-secret as-…  (stored in ~/.modal.toml)
+modal deploy src/scripts/deploy_modal.py     # persistent: https://<workspace>--spice-demo-serve.modal.run
+modal serve  src/scripts/deploy_modal.py     # dev: temporary URL, hot reload
+```
+
+The script applies two Modal-specific image tweaks (see its comments): `add_python` (the image has
+only `python3`, no bare `python`, so Modal can't detect the interpreter) and `.entrypoint([])` (clear
+the image's `tini → entrypoint.sh`, which otherwise fights Modal's runtime). It needs the GPU's CUDA
+arch to match the image's baked arches (`80;86;89`) — **A10G/A100/L4 work, T4 does not** — and the
+image must contain `libgomp1` (added to the runtime stage in `Dockerfile`/`Dockerfile.slim`; rebuild
++ re-push `:latest` before deploying from the hotfix-free script).
+
 The server is a customized build of **llama.cpp** serving two models (fine-tuned + base) with an
 embedded SvelteKit UI. It requires CUDA (tested on RTX 3060 12 GB).
 
