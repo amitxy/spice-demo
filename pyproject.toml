@@ -17,6 +17,13 @@ dependencies = [
     "bitsandbytes>=0.43.0",
 ]
 
+[dependency-groups]
+# Deploy-time only (not needed for training/inference). Run: uv sync --group deploy
+# Drives src/scripts/deploy_modal.py via the `modal` CLI.
+deploy = [
+    "modal>=1.5.0",
+]
+
 [tool.uv.sources]
 torch = { index = "pytorch-cu124" }
 
