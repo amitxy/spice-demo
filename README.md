@@ -6,6 +6,8 @@ behavior at inference time by swapping the rulebook, not the weights.**
 🔗 **Live demo:** https://amitxy--spice-demo-serve.modal.run *(scales to zero when idle — the
 first request may take a minute to cold-start the GPU)*
 
+![Base vs Fine-tuned comparison](https://huggingface.co/buckets/Amitxy/public/resolve/spice/base_vs_finetuned_comparison.gif)
+
 ---
 
 ## The idea
